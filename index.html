@@ -539,6 +539,33 @@ body.writer-mode header.site,body.writer-mode footer.site{display:none}
 .prof-ph{display:flex;flex-direction:column;align-items:center;gap:10px}
 .prof-bio{font-family:var(--serif);font-size:18px;line-height:1.55;color:var(--ink)!important}
 .chat-head .wa-btn{display:inline-block;margin-top:6px}
+/* member data form */
+.form-cta{display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;padding:24px 26px;margin-bottom:22px;border-color:var(--gold)}
+.form-cta h3{font-size:clamp(24px,5vw,32px);margin:6px 0}
+@media (max-width:640px){.form-cta{grid-template-columns:1fr}}
+.mform{padding:26px 22px;display:flex;flex-direction:column;gap:6px}
+.fq{padding:18px 0;border-bottom:1px solid rgba(42,44,49,.12);transition:background .3s}
+.fq.missing{background:rgba(140,106,46,.1);border-radius:12px}
+.fq-l{font-family:var(--serif);font-size:19px;line-height:1.35;margin-bottom:10px}
+.req{color:#8a3b2e}
+.fq input:not([type=radio]):not([type=checkbox]),.fq textarea{width:100%;background:var(--cream);border:var(--line);border-radius:14px;padding:12px 14px;font-size:16px;outline:none}
+.fq textarea{min-height:90px;resize:vertical}
+.opt-grid{display:flex;flex-wrap:wrap;gap:8px}
+.opt{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--ink);border-radius:999px;padding:9px 16px;font-size:14px;cursor:pointer;background:transparent;transition:background .15s}
+.opt input{position:absolute;opacity:0;pointer-events:none}
+.opt.on{background:var(--ink);color:var(--cream)}
+.fsum{padding:20px;margin-top:12px}
+.bar-row{display:grid;grid-template-columns:minmax(90px,38%) 1fr 34px;gap:10px;align-items:center;font-size:13px;margin-top:8px}
+.bar{height:10px;background:rgba(42,44,49,.08);border-radius:999px;overflow:hidden}.bar i{display:block;height:100%;background:var(--gold);border-radius:999px}
+.bn{text-align:right;font-weight:500}.bl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.txt-ans{font-size:14px;border-left:2px solid var(--gold-l);padding:4px 0 4px 10px;margin-top:8px}
+details.resp{margin-top:10px;padding:0}
+details.resp summary{display:flex;gap:12px;align-items:center;padding:14px 16px;cursor:pointer;list-style:none}
+details.resp summary::-webkit-details-marker{display:none}
+details.resp summary .t{font-size:17px;font-family:var(--serif)}details.resp summary .s{font-size:12.5px;color:var(--muted)}
+details.resp dl{padding:0 18px 16px;display:grid;grid-template-columns:1fr;gap:2px}
+details.resp dt{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin-top:10px}
+details.resp dd{font-size:14.5px}
 </style>
 </head>
 <body>
@@ -619,7 +646,7 @@ body.writer-mode header.site,body.writer-mode footer.site{display:none}
 window.TBO_CONFIG = {
   SUPABASE_URL: "https://tfskjudzlnksnarukmrj.supabase.co",
   SUPABASE_ANON_KEY: "sb_publishable_wwO2cUJWBc9kcTTnDvdJhw_-zCfcHEq",  // publishable (public) key — safe to be on the website
-  SHOW_EXAMPLES: true,       // show the example articles & members alongside real ones
+  SHOW_EXAMPLES: false,      // example articles & members switched off — only real members' content shows
   REQUIRE_INVITE: false,     // true = sign-up asks for the invite code you set in Supabase
   FOUNDER_PROFILE_ID: "",    // optional: your own profile id, so About links to your real profile
   WHATSAPP_LINK: "https://chat.whatsapp.com/HoScHfb0ThdKV3KsFqPVnO",
@@ -1072,7 +1099,7 @@ const DB={
     finally{authBusy=false;}
   },
   demo(){if(LIVE)return;store.session=sessionId="u-steffi";persist();},
-  async signOut(){
+  async signOut(){myResp=null;allResp=null;
     if(!LIVE){store.session=sessionId=null;persist();return;}
     authBusy=true;try{await sb.auth.signOut();sessionId=null;await DB.reload();}finally{authBusy=false;}
   },
@@ -1175,6 +1202,18 @@ const DB={
     return true;
   },
   async setArticleStatus(a,status){const rec=Object.assign({},a,{status,updated:new Date().toISOString()});return DB.saveArticle(rec);},
+  async getResponse(uid){
+    if(!LIVE){const r=(store.responses||{})[uid]||(SHOW_EX&&SEED_RESPONSES[uid]?{answers:SEED_RESPONSES[uid],updated_at:"2026-11-20T03:00:00.000Z"}:null);return r;}
+    const {data,error}=await sb.from("member_responses").select("*").eq("user_id",uid);if(error){console.warn(error);return null;}return data&&data[0]?{answers:data[0].answers||{},updated_at:data[0].updated_at}:null;
+  },
+  async saveResponse(answers){
+    if(!LIVE){store.responses=store.responses||{};store.responses[sessionId]={answers,updated_at:new Date().toISOString()};return persist();}
+    const {error}=await sb.from("member_responses").upsert({user_id:sessionId,answers,updated_at:new Date().toISOString()});if(error){toast(error.message,5000);return false;}return true;
+  },
+  async allResponses(){
+    if(!LIVE){const m={};if(SHOW_EX)Object.entries(SEED_RESPONSES).forEach(([k,v])=>m[k]={answers:v,updated_at:"2026-11-20T03:00:00.000Z"});Object.assign(m,store.responses||{});return m;}
+    const {data,error}=await sb.from("member_responses").select("*");if(error){toast(error.message,5000);return {};}const m={};data.forEach(r=>m[r.user_id]={answers:r.answers||{},updated_at:r.updated_at});return m;
+  },
   async saveSettings(obj){
     if(!LIVE){store.settings=Object.assign({},store.settings||{},obj);return persist();}
     const rows=Object.entries(obj).map(([key,value])=>({key,value}));const {error}=await sb.from("settings").upsert(rows);
@@ -1619,7 +1658,8 @@ function viewAccount(){const u=me();const mine=allArticles().filter(a=>a.author=
   const row=a=>`<div class="mini"><a href="#${a.status==="published"?esc(a.id):"edit-"+esc(a.id)}" class="cover">${coverHTML(a)}</a><div style="min-width:0"><div class="s">${esc(a.status==="published"?t("published"):t("drafts"))} · ${esc(catName(a.cat))}</div>
    <div class="t">${esc(a.title||t("untitled"))}</div></div><div class="acts"><a class="small-btn" href="#edit-${esc(a.id)}">${esc(t("edit"))}</a><button class="small-btn danger" data-del="${esc(a.id)}">${esc(t("del"))}</button></div></div>`;
   return `<div class="wrap fade" style="padding-bottom:70px"><div class="page-head"><div class="label">${esc(t("account"))}</div><h1 class="h-display" style="margin-top:10px"><em>${esc(t("welcome"))},</em> <strong>${esc(String(u.name||"").split(" ")[0])}</strong></h1>
-   <div class="btn-row" style="margin-top:20px">${btn(esc(t("write_new")),"#write","solid")}${btn(esc(t("view_profile")),"#member-"+esc(u.id))}${isAdmin()?btn("Admin dashboard","#admin"):""}<button class="btn plain" id="signOut">${esc(t("signout"))}</button></div></div>
+   <div class="btn-row" style="margin-top:20px">${btn(esc(t("write_new")),"#write","solid")}${btn(esc(t("view_profile")),"#member-"+esc(u.id))}${btn(esc(myResp&&myResp.answers&&Object.keys(myResp.answers).length?ft("edit"):ft("fill")),"#member-data")}${isAdmin()?btn("Admin dashboard","#admin"):""}<button class="btn plain" id="signOut">${esc(t("signout"))}</button></div></div>
+   <div id="formCta">${formCTA()}</div>
    <div class="two" style="align-items:start">
    <div class="card" style="padding:26px"><div class="label">${esc(t("edit_profile"))}</div>
     <div style="margin:18px 0">${photoBlock(u,"pfPhoto")}</div>
@@ -1636,7 +1676,7 @@ function viewAccount(){const u=me();const mine=allArticles().filter(a=>a.author=
      <button class="btn solid" style="align-self:flex-start" id="pfSave">${esc(t("save_profile"))}<span class="arr">${ARROW}</span></button></form></div>
    <div><div class="label" style="margin-bottom:6px">${esc(t("my_stories"))}</div><div class="mini-list" id="myList">${mine.length?mine.map(row).join(""):`<div class="empty">${esc(t("no_articles"))}</div>`}</div></div></div></div>`;}
 let pendingPhoto=null;
-function afterAccount(){pendingPhoto=null;wirePicker($("#pfForm .dv-pick"));
+function afterAccount(){pendingPhoto=null;loadMyResp().then(()=>{const c=$("#formCta");if(c)c.innerHTML=formCTA();});wirePicker($("#pfForm .dv-pick"));
   $("#signOut").onclick=async()=>{await DB.signOut();go("home");};
   wirePhoto("pfPhoto",d=>pendingPhoto=d);
   $("#pfForm").onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),g=k=>String(f.get(k)||"").trim();const b=$("#pfSave");busy(b,true);
@@ -1694,7 +1734,7 @@ async function afterChat(room){if(!me())return;
 function viewInbox(){if(!me())return chatGate();
   const welcome=store.justJoined;if(welcome){store.justJoined=false;persist();}
   return `<div class="wrap fade" style="padding-bottom:70px">${welcome?`<div class="card dark welcome-card"><div class="label">${esc(t("welcome_lbl"))}</div><h2 class="h-display">${t("welcome_h")}</h2><p>${esc(t("welcome_text"))}</p>
-   <div class="btn-row">${btn(esc(t("nav_find")),"#members")}${btn(esc(t("write_story")),"#write")}</div></div>`:""}
+   <div class="btn-row">${btn(esc(ft("fill")),"#member-data")}${btn(esc(t("nav_find")),"#members")}${btn(esc(t("write_story")),"#write")}</div></div>`:""}
    <div class="page-head"><div class="label">${esc(t("msgs_lbl"))}</div><h1 class="h-display" style="margin-top:10px">${t("msgs_h")}</h1>
    <div class="label" style="margin:24px 0 0;color:var(--ink)">${esc(t("find_msg"))}</div>${findBox("inbox")}</div>
    <div class="two" style="align-items:start"><div><div class="label" style="margin-bottom:6px">${esc(t("dms"))}</div><div class="mini-list" id="dmList"><div class="empty">${esc(t("loading"))}</div></div></div>
@@ -1975,7 +2015,7 @@ const badge=(txt,cls)=>`<span class="badge ${cls||""}">${esc(txt)}</span>`;
 function adminGate(){return `<div class="wrap fade"><div class="card auth-card" style="text-align:center"><div class="label">Admin</div><h1 class="h-display"><em>Admins</em> <strong>only</strong></h1>
   <p class="muted">This page is only for The Buz Owners admins.</p><div class="btn-row" style="justify-content:center;margin-top:18px">${me()?btn("Back home","#home","solid"):btn(esc(t("signin")),"#signin","solid")}</div></div></div>`;}
 function viewAdmin(){if(!isAdmin())return adminGate();
-  const tabs=[["overview","Overview"],["members","Members"],["articles","Articles"],["feed","Feed & comments"],["rooms","Expert rooms"],["settings","Site settings"]];
+  const tabs=[["overview","Overview"],["members","Members"],["articles","Articles"],["feed","Feed & comments"],["rooms","Expert rooms"],["form","Member data"],["settings","Site settings"]];
   return `<div class="wrap fade admin" style="padding-bottom:80px"><div class="page-head" style="padding-bottom:10px"><div class="label">Admin</div><h1 class="h-display" style="margin-top:10px"><em>Admin</em> <strong>dashboard</strong></h1></div>
    <div class="chips" id="admTabs">${tabs.map(([k,l])=>`<button class="chip ${adminTab===k?"on":""}" data-tab="${k}">${l}</button>`).join("")}</div>
    <div id="admBody" class="adm-body"></div></div>`;}
@@ -1985,7 +2025,7 @@ async function afterAdmin(){if(!isAdmin())return;
   if(adminEmails===null){const r=await DB.adminCall("list_users");if(r&&r.users){adminEmails={};r.users.forEach(u=>adminEmails[u.id]=u);}else{adminEmails={};if(r&&r.error)console.warn(r.error);}
     if(adminTab==="members"||adminTab==="overview")renderAdmin();}}
 function renderAdmin(){const box=$("#admBody");if(!box)return;
-  const fn={overview:admOverview,members:admMembers,articles:admArticles,feed:admFeed,rooms:admRooms,settings:admSettings}[adminTab]||admOverview;fn(box);}
+  const fn={overview:admOverview,members:admMembers,articles:admArticles,feed:admFeed,rooms:admRooms,form:admFormTab,settings:admSettings}[adminTab]||admOverview;fn(box);}
 function admSearch(ph){return `<form class="search adm-search" onsubmit="return false"><input id="admQ" type="search" placeholder="${esc(ph)}" value="${esc(adminQ)}"><span class="arr">${ARROW}</span></form>`;}
 function wireSearch(cb){const i=$("#admQ");if(i)i.oninput=e=>{adminQ=e.target.value;cb();};}
 function admOverview(box){const U=Object.values(allUsersRaw()),A=allArticles(),P=allPostsRaw();const wk=Date.now()-7*864e5;
@@ -2099,6 +2139,149 @@ function renderAnnouncement(){let el=$("#announce");const S=settingsAll();const 
   el.innerHTML=`<div class="wrap ann-in"><span>${linkify(txt)}</span><button aria-label="Close" id="annX">×</button></div>`;
   $("#annX").onclick=()=>{try{sessionStorage.setItem("tbo_ann_closed",txt);}catch(e){}el.remove();};}
 
+/* ================= member data form (Google-Form style) ================= */
+const O=(en,id)=>({en,id:id||en});
+const DEFAULT_FORM=[
+ {id:"q_status",type:"single",required:true,en:"What do you do for work?",id_:"Apa pekerjaan kamu saat ini?",options:[O("Business owner","Pemilik bisnis"),O("Employee","Karyawan"),O("Freelancer / professional","Freelancer / profesional"),O("Student","Mahasiswa / pelajar"),O("Other","Lainnya")]},
+ {id:"q_biz_name",type:"short",required:true,en:"What business do you own? (business name)",id_:"Bisnis apa yang kamu miliki? (nama bisnis)",show_if:{q:"q_status",op:"eq",v:"Business owner"}},
+ {id:"q_biz_industry",type:"single",required:true,en:"Which industry is it in?",id_:"Bergerak di bidang apa?",options:"DIVISIONS",show_if:{q:"q_status",op:"eq",v:"Business owner"}},
+ {id:"q_biz_desc",type:"long",en:"Describe your business in a few sentences",id_:"Ceritakan singkat tentang bisnismu",show_if:{q:"q_status",op:"eq",v:"Business owner"}},
+ {id:"q_biz_year",type:"number",en:"What year did the business start?",id_:"Tahun berapa bisnis dimulai?",show_if:{q:"q_status",op:"eq",v:"Business owner"}},
+ {id:"q_biz_model",type:"single",en:"Where do you sell?",id_:"Di mana kamu berjualan?",options:[O("Online only","Online saja"),O("Physical store / location","Toko / lokasi fisik"),O("Both","Keduanya")],show_if:{q:"q_status",op:"eq",v:"Business owner"}},
+ {id:"q_biz_team",type:"single",en:"How many people work in your business?",id_:"Berapa orang yang bekerja di bisnismu?",options:[O("Just me","Saya sendiri"),O("2–5"),O("6–20"),O("21–50"),O("More than 50","Lebih dari 50")],show_if:{q:"q_status",op:"eq",v:"Business owner"}},
+ {id:"q_biz_branches",type:"number",en:"How many outlets / branches?",id_:"Berapa outlet / cabang?",show_if:{q:"q_status",op:"eq",v:"Business owner"}},
+ {id:"q_biz_revenue",type:"single",en:"Monthly revenue range (optional — only admins see this)",id_:"Kisaran omzet per bulan (opsional — hanya admin yang melihat)",options:[O("Under Rp 10 million","Di bawah Rp 10 juta"),O("Rp 10–50 million","Rp 10–50 juta"),O("Rp 50–200 million","Rp 50–200 juta"),O("Rp 200 million – 1 billion","Rp 200 juta – 1 miliar"),O("Over Rp 1 billion","Di atas Rp 1 miliar"),O("Prefer not to say","Tidak ingin menyebutkan")],show_if:{q:"q_status",op:"eq",v:"Business owner"}},
+ {id:"q_job",type:"short",required:true,en:"Where do you work and what is your role?",id_:"Kamu bekerja di mana dan sebagai apa?",show_if:{q:"q_status",op:"eq",v:"Employee"}},
+ {id:"q_free",type:"short",required:true,en:"What service do you offer?",id_:"Jasa apa yang kamu tawarkan?",show_if:{q:"q_status",op:"eq",v:"Freelancer / professional"}},
+ {id:"q_study",type:"short",en:"Where do you study, and what major?",id_:"Kuliah / sekolah di mana, jurusan apa?",show_if:{q:"q_status",op:"eq",v:"Student"}},
+ {id:"q_plan",type:"single",en:"Are you planning to start a business?",id_:"Apakah kamu berencana memulai bisnis?",options:[O("Yes, within 6 months","Ya, dalam 6 bulan"),O("Yes, someday","Ya, suatu saat"),O("Not right now","Belum")],show_if:{q:"q_status",op:"neq",v:"Business owner"}},
+ {id:"q_goals",type:"multi",required:true,en:"What do you hope to get from The Buz Owners?",id_:"Apa yang ingin kamu dapatkan dari The Buz Owners?",options:[O("Networking","Networking"),O("Learning from other owners","Belajar dari owner lain"),O("Collaboration partners","Partner kolaborasi"),O("Finding customers","Mencari pelanggan"),O("Investors / funding","Investor / pendanaan"),O("Mentoring","Mentoring"),O("Hiring talent","Mencari karyawan"),O("Events & meetups","Event & meetup")]},
+ {id:"q_offer",type:"long",en:"What can you share or help other members with?",id_:"Apa yang bisa kamu bagikan atau bantu ke anggota lain?"},
+ {id:"q_age",type:"single",en:"Age range (optional)",id_:"Rentang usia (opsional)",options:[O("Under 25","Di bawah 25"),O("25–34"),O("35–44"),O("45–54"),O("55+"),O("Prefer not to say","Tidak ingin menyebutkan")]},
+ {id:"q_source",type:"single",en:"How did you hear about us?",id_:"Dari mana kamu tahu tentang kami?",options:[O("Instagram"),O("WhatsApp group","Grup WhatsApp"),O("A friend / member","Teman / anggota"),O("An event","Event"),O("Other","Lainnya")]}
+];
+const QTYPES=[["short","Short answer"],["long","Paragraph"],["number","Number"],["date","Date"],["single","Multiple choice (one)"],["multi","Checkboxes (many)"]];
+const SEED_RESPONSES={
+ "u-rosmila":{q_status:"Business owner",q_biz_name:"Cobi Co Shop",q_biz_industry:"Retail & E-commerce",q_biz_model:"Both",q_biz_team:"6–20",q_biz_year:"2019",q_biz_branches:"2",q_goals:["Learning from other owners","Investors / funding"],q_age:"35–44",q_source:"WhatsApp group"},
+ "u-hendra":{q_status:"Business owner",q_biz_name:"Kopi Lereng",q_biz_industry:"Food & Beverage",q_biz_model:"Physical store / location",q_biz_team:"2–5",q_biz_year:"2023",q_biz_branches:"1",q_goals:["Networking","Finding customers"],q_age:"25–34",q_source:"Instagram"},
+ "u-nadia":{q_status:"Business owner",q_biz_name:"Rupa Atelier",q_biz_industry:"Fashion & Beauty",q_biz_model:"Online only",q_biz_team:"2–5",q_biz_year:"2022",q_goals:["Collaboration partners","Hiring talent","Events & meetups"],q_age:"25–34",q_source:"A friend / member"},
+ "u-andreas":{q_status:"Freelancer / professional",q_free:"Tax consulting for SMEs",q_plan:"Yes, someday",q_goals:["Networking","Finding customers"],q_age:"35–44",q_source:"An event"},
+ "u-citra":{q_status:"Business owner",q_biz_name:"Kala Florist",q_biz_industry:"Events & Wedding",q_biz_model:"Both",q_biz_team:"2–5",q_biz_year:"2021",q_goals:["Finding customers","Mentoring"],q_age:"25–34",q_source:"Instagram"}
+};
+let formCache=null,myResp=null,allResp=null;
+function formDef(){const S=settingsAll();if(S.public_member_form){try{const f=JSON.parse(S.public_member_form);if(Array.isArray(f)&&f.length)return f;}catch(e){}}return DEFAULT_FORM;}
+function qOptions(q){return q.options==="DIVISIONS"?DIVISIONS.map(d=>({en:d.en,id:d.id_})):(q.options||[]);}
+const qLabel=q=>lang==="id"&&q.id_?q.id_:q.en;
+const optLabel=o=>lang==="id"&&o.id?o.id:o.en;
+function qVisible(q,ans){const c=q.show_if;if(!c||!c.q)return true;const a=ans[c.q];const has=Array.isArray(a)?a.includes(c.v):a===c.v;return c.op==="neq"?(a!==undefined&&a!==""&&!has):has;}
+const FORM_T={en:{lbl:"Member data",h:"<em>Tell us about</em> <strong>you</strong>",intro:"Help us get to know the community — this takes about 2 minutes. Only you and the admins can see your answers.",save:"Save my answers",saved:"Thank you — your answers are saved",req:"Please answer the required questions (marked *).",updated:"Last updated",cta_h:"<em>Complete your</em> <strong>member data</strong>",cta:"Two minutes, so we can connect you with the right people and plan better events.",fill:"Fill in member data",edit:"Update member data",done:"Member data complete"},
+ id:{lbl:"Data anggota",h:"<em>Ceritakan tentang</em> <strong>kamu</strong>",intro:"Bantu kami mengenal komunitas — hanya sekitar 2 menit. Jawabanmu hanya bisa dilihat oleh kamu dan admin.",save:"Simpan jawaban",saved:"Terima kasih — jawabanmu tersimpan",req:"Mohon jawab pertanyaan wajib (bertanda *).",updated:"Terakhir diperbarui",cta_h:"<em>Lengkapi</em> <strong>data anggota</strong>",cta:"Dua menit, supaya kami bisa menghubungkanmu dengan orang yang tepat dan merencanakan event lebih baik.",fill:"Isi data anggota",edit:"Perbarui data anggota",done:"Data anggota lengkap"}};
+const ft=k=>FORM_T[lang][k]||FORM_T.en[k];
+async function loadMyResp(){if(!sessionId)return null;myResp=await DB.getResponse(sessionId);return myResp;}
+function formCTA(){if(!me()||(myResp&&myResp.answers&&Object.keys(myResp.answers).length))return "";
+  return `<div class="card form-cta"><div><div class="label">${esc(ft("lbl"))}</div><h3 class="h-display">${ft("cta_h")}</h3><p class="muted">${esc(ft("cta"))}</p></div>${btn(esc(ft("fill")),"#member-data","solid")}</div>`;}
+function fieldHTML(q,ans){const v=ans[q.id];const name=`f_${q.id}`;const req=q.required?' <span class="req">*</span>':"";
+  let input="";
+  if(q.type==="short")input=`<input name="${name}" value="${esc(v||"")}" maxlength="200">`;
+  else if(q.type==="long")input=`<textarea name="${name}" maxlength="1500">${esc(v||"")}</textarea>`;
+  else if(q.type==="number")input=`<input name="${name}" type="number" inputmode="numeric" value="${esc(v||"")}">`;
+  else if(q.type==="date")input=`<input name="${name}" type="date" value="${esc(v||"")}">`;
+  else if(q.type==="single"||q.type==="multi"){const multi=q.type==="multi";
+    input=`<div class="opt-grid">${qOptions(q).map(o=>{const on=multi?(Array.isArray(v)&&v.includes(o.en)):v===o.en;
+      return `<label class="opt ${on?"on":""}"><input type="${multi?"checkbox":"radio"}" name="${name}" value="${esc(o.en)}" ${on?"checked":""}><span>${esc(optLabel(o))}</span></label>`;}).join("")}</div>`;}
+  return `<div class="fq ${qVisible(q,ans)?"":"hide"}" data-q="${esc(q.id)}"><div class="fq-l">${esc(qLabel(q))}${req}</div>${multiHint(q)}${input}</div>`;}
+const multiHint=q=>q.type==="multi"?`<div class="hint" style="margin-bottom:8px">${lang==="id"?"Boleh pilih lebih dari satu":"Choose all that apply"}</div>`:"";
+function readAnswers(form){const ans={};formDef().forEach(q=>{const name=`f_${q.id}`;
+  if(q.type==="multi")ans[q.id]=$$(`input[name="${name}"]:checked`,form).map(i=>i.value);
+  else if(q.type==="single"){const c=form.querySelector(`input[name="${name}"]:checked`);ans[q.id]=c?c.value:"";}
+  else{const el=form.querySelector(`[name="${name}"]`);ans[q.id]=el?el.value.trim():"";}});return ans;}
+function viewMemberForm(){if(!me())return chatGate();const ans=(myResp&&myResp.answers)||{};
+  return `<div class="wrap narrow fade" style="padding-bottom:80px"><div class="page-head"><div class="label">${esc(ft("lbl"))}</div><h1 class="h-display" style="margin-top:10px">${ft("h")}</h1>
+   <p class="muted" style="margin-top:12px">${esc(ft("intro"))}</p>${myResp&&myResp.updated_at?`<p class="hint" style="margin-top:8px">${esc(ft("updated"))}: ${esc(fmtDate(String(myResp.updated_at).slice(0,10)))}</p>`:""}</div>
+   <form class="card mform" id="mForm">${formDef().map(q=>fieldHTML(q,ans)).join("")}<div class="err" id="mErr"></div>
+   <button class="btn solid" style="align-self:flex-start" id="mSave">${esc(ft("save"))}<span class="arr">${ARROW}</span></button></form></div>`;}
+async function afterMemberForm(){if(!me())return;if(myResp===null||myResp===undefined){await loadMyResp();if(location.hash==="#member-data"){$("#app").innerHTML=viewMemberForm();}}
+  const form=$("#mForm");if(!form)return;
+  const refresh=()=>{const ans=readAnswers(form);formDef().forEach(q=>{const el=form.querySelector(`.fq[data-q="${CSS.escape(q.id)}"]`);if(el)el.classList.toggle("hide",!qVisible(q,ans));});
+    $$(".opt",form).forEach(l=>l.classList.toggle("on",l.querySelector("input").checked));};
+  form.addEventListener("change",refresh);
+  form.onsubmit=async e=>{e.preventDefault();const ans=readAnswers(form);const out={};let missing=null;
+    formDef().forEach(q=>{if(!qVisible(q,ans))return;const v=ans[q.id];const empty=Array.isArray(v)?!v.length:!v;
+      if(q.required&&empty&&!missing)missing=q.id;if(!empty)out[q.id]=v;});
+    if(missing){$("#mErr").textContent=ft("req");const el=form.querySelector(`.fq[data-q="${CSS.escape(missing)}"]`);if(el){el.classList.add("missing");el.scrollIntoView({behavior:"smooth",block:"center"});setTimeout(()=>el.classList.remove("missing"),2500);}return;}
+    const b=$("#mSave");busy(b,true,t("saving"));const ok=await DB.saveResponse(out);busy(b,false);
+    if(ok){myResp={answers:out,updated_at:new Date().toISOString()};allResp=null;toast(ft("saved"),3500);go("account");}};}
+
+/* ---- admin: results + form builder ---- */
+let formView="summary",respQ="";
+function admFormTab(box){if(allResp===null){box.innerHTML=`<p class="muted">${esc(t("loading"))}</p>`;DB.allResponses().then(r=>{allResp=r||{};if(adminTab==="form")admFormTab(box);});return;}
+  const U=allUsersRaw(),F=formDef(),ids=Object.keys(allResp).filter(id=>U[id]);const total=Object.keys(U).length;
+  box.innerHTML=`<div class="adm-bar"><div class="muted" style="flex:1;font-size:14px"><b style="font-family:var(--serif);font-size:26px;color:var(--ink)">${ids.length}</b> of ${total} members have filled in their data</div>
+    ${LIVE?`<button class="small-btn" id="fxCsv">Download CSV</button>`:""}<button class="small-btn" id="fxCopy">Copy as CSV</button></div>
+   <div class="chips" id="fxView" style="padding-top:4px">${[["summary","Summary"],["responses","Responses"],["builder","Edit questions"]].map(([k,l])=>`<button class="chip sm ${formView===k?"on":""}" data-v="${k}">${l}</button>`).join("")}</div><div id="fxBody"></div>`;
+  $("#fxView").onclick=e=>{const b=e.target.closest("[data-v]");if(!b)return;formView=b.dataset.v;admFormTab(box);};
+  if($("#fxCsv"))$("#fxCsv").onclick=()=>{const csv=respCSV(ids);try{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv"}));a.download="the-buz-owners-member-data.csv";document.body.appendChild(a);a.click();a.remove();toast("Downloading…");}catch(err){toast("Download blocked here — use Copy as CSV",4000);}};
+  $("#fxCopy").onclick=async()=>{try{await navigator.clipboard.writeText(respCSV(ids));toast("Copied — paste into Google Sheets or Excel",4000);}catch(err){toast("Couldn't copy",3000);}};
+  const fb=$("#fxBody");
+  if(formView==="summary"){fb.innerHTML=F.map(q=>{const answers=ids.map(id=>allResp[id].answers[q.id]).filter(v=>v!==undefined&&v!==""&&!(Array.isArray(v)&&!v.length));
+      if(q.type==="single"||q.type==="multi"){const counts={};answers.forEach(v=>[].concat(v).forEach(x=>counts[x]=(counts[x]||0)+1));
+        const opts=qOptions(q).map(o=>o.en).filter(o=>counts[o]).concat(Object.keys(counts).filter(k=>!qOptions(q).some(o=>o.en===k)));const max=Math.max(1,...Object.values(counts));
+        return `<div class="card fsum"><div class="fq-l">${esc(q.en)}</div><div class="hint">${answers.length} answer${answers.length===1?"":"s"}</div>
+          ${opts.length?opts.sort((a,b)=>counts[b]-counts[a]).map(o=>`<div class="bar-row"><span class="bl">${esc(o)}</span><span class="bar"><i style="width:${Math.round(counts[o]/max*100)}%"></i></span><span class="bn">${counts[o]}</span></div>`).join(""):`<p class="muted" style="font-size:13px">No answers yet.</p>`}</div>`;}
+      return `<div class="card fsum"><div class="fq-l">${esc(q.en)}</div><div class="hint">${answers.length} answer${answers.length===1?"":"s"}</div>
+        ${answers.slice(0,6).map(v=>`<div class="txt-ans">${esc(String(v))}</div>`).join("")}${answers.length>6?`<div class="hint">+${answers.length-6} more in Responses</div>`:""}</div>`;}).join("");}
+  else if(formView==="responses"){const q=respQ.toLowerCase();
+    const list=ids.filter(id=>!q||(U[id].name+" "+JSON.stringify(allResp[id].answers)).toLowerCase().includes(q)).sort((a,b)=>String(allResp[b].updated_at||"").localeCompare(String(allResp[a].updated_at||"")));
+    fb.innerHTML=`<form class="search adm-search" onsubmit="return false" style="margin:10px 0"><input id="respQ" type="search" placeholder="Search answers…" value="${esc(respQ)}"><span class="arr">${ARROW}</span></form>`+
+     list.map(id=>{const u=U[id],r=allResp[id];return `<details class="card resp"><summary><span class="portrait" style="width:40px;height:40px">${portrait(u)}</span><div style="flex:1;min-width:0"><div class="t">${esc(u.name)}</div>
+       <div class="s">${esc([r.answers.q_status,r.answers.q_biz_name||r.answers.q_job||r.answers.q_free,r.updated_at?fmtDate(String(r.updated_at).slice(0,10)):""].filter(Boolean).join(" · "))}</div></div></summary>
+       <dl>${F.filter(q=>r.answers[q.id]!==undefined).map(q=>`<dt>${esc(q.en)}</dt><dd>${esc([].concat(r.answers[q.id]).join(", "))}</dd>`).join("")}</dl></details>`;}).join("")||`<div class="empty">No responses yet.</div>`;
+    const i=$("#respQ");i.oninput=e=>{respQ=e.target.value;const st=respQ;admFormTab(box);formView="responses";const j=$("#respQ");if(j){j.focus();j.setSelectionRange(st.length,st.length);}};}
+  else admBuilder(fb,box);}
+function respCSV(ids){const U=allUsersRaw(),F=formDef();const em=adminEmails||{};
+  const cell=v=>{const s=Array.isArray(v)?v.join("; "):String(v??"");return /[",\n;]/.test(s)?`"${s.replace(/"/g,'""')}"`:s;};
+  const head=["Name","Email","Business (profile)","City","Updated"].concat(F.map(q=>q.en));
+  const rows=ids.map(id=>{const u=U[id],r=allResp[id];return [u.name,(em[id]&&em[id].email)||"",u.business||"",u.city||"",String(r.updated_at||"").slice(0,10)].concat(F.map(q=>r.answers[q.id]??""));});
+  return [head].concat(rows).map(r=>r.map(cell).join(",")).join("\n");}
+let builderDraft=null;
+function admBuilder(fb,box){if(!builderDraft)builderDraft=JSON.parse(JSON.stringify(formDef()));const F=builderDraft;
+  const tl=k=>(QTYPES.find(x=>x[0]===k)||[k,k])[1];
+  fb.innerHTML=`<p class="hint" style="margin:10px 0">Changes appear for members after you click <b>Publish form</b>. Removing a question keeps old answers in the data but hides it from the form.</p>
+   <div class="mini-list">${F.map((q,i)=>`<div class="mini adm-row"><div style="flex:1;min-width:0"><div class="t">${i+1}. ${esc(q.en)}${q.required?' <span class="req">*</span>':""}</div>
+     <div class="s">${esc(tl(q.type))}${q.show_if&&q.show_if.q?` · shows if “${esc((F.find(x=>x.id===q.show_if.q)||{}).en||q.show_if.q)}” ${q.show_if.op==="neq"?"is not":"is"} “${esc(q.show_if.v)}”`:""}</div></div>
+     <div class="acts"><button class="small-btn" data-mv="${i}:-1" ${i?"":"disabled"}>↑</button><button class="small-btn" data-mv="${i}:1" ${i<F.length-1?"":"disabled"}>↓</button><button class="small-btn" data-ed="${i}">Edit</button><button class="small-btn danger" data-rm="${i}">✕</button></div></div>`).join("")}</div>
+   <div class="btn-row" style="margin-top:16px"><button class="btn" id="bAdd" type="button">Add question<span class="arr">${ARROW}</span></button><button class="btn solid" id="bPub" type="button">Publish form<span class="arr">${ARROW}</span></button>
+   <button class="small-btn" id="bReset" type="button">Restore default questions</button><button class="small-btn" id="bDiscard" type="button">Discard changes</button></div>`;
+  fb.onclick=async e=>{const mv=e.target.closest("[data-mv]"),ed=e.target.closest("[data-ed]"),rm=e.target.closest("[data-rm]");
+    if(mv){const [i,d]=mv.dataset.mv.split(":").map(Number);const [x]=F.splice(i,1);F.splice(i+d,0,x);admBuilder(fb,box);}
+    if(ed)editQuestion(+ed.dataset.ed,()=>admBuilder(fb,box));
+    if(rm){if(await confirmBox("Remove this question?",F[+rm.dataset.rm].en,"Remove")){F.splice(+rm.dataset.rm,1);admBuilder(fb,box);}}};
+  $("#bAdd").onclick=()=>{F.push({id:"q_"+Date.now().toString(36),type:"short",en:"New question",id_:""});editQuestion(F.length-1,()=>admBuilder(fb,box),true);};
+  $("#bPub").onclick=async()=>{const ok=await DB.saveSettings({public_member_form:JSON.stringify(F)});if(ok){toast("Form published");builderDraft=null;admFormTab(box);}};
+  $("#bReset").onclick=async()=>{if(await confirmBox("Restore the default questions?","Your edited questions will be replaced (answers are kept).","Restore")){builderDraft=JSON.parse(JSON.stringify(DEFAULT_FORM));admBuilder(fb,box);}};
+  $("#bDiscard").onclick=()=>{builderDraft=null;admBuilder(fb,box);};}
+function editQuestion(i,done,isNew){const F=builderDraft,q=F[i];const others=F.filter((x,j)=>j!==i&&(x.type==="single"||x.type==="multi"));
+  const opts=q.options==="DIVISIONS"?null:(q.options||[]);
+  admModal(isNew?"Add question":"Edit question",`<div class="field"><label>Question (English) *</label><input name="en" value="${esc(q.en)}" required></div>
+   <div class="field"><label>Question (Bahasa Indonesia)</label><input name="id_" value="${esc(q.id_||"")}"></div>
+   <div class="ed-grid"><div class="field"><label>Answer type</label><select name="type">${QTYPES.map(([k,l])=>`<option value="${k}" ${q.type===k?"selected":""}>${l}</option>`).join("")}</select></div>
+   <label class="check" style="align-self:end;padding-bottom:12px"><input type="checkbox" name="required" ${q.required?"checked":""}><span>Required</span></label></div>
+   <div class="field opts-f"><label>Choices — one per line (English)</label>${q.options==="DIVISIONS"?`<p class="hint">Uses the website's list of fields of expertise.</p><input type="hidden" name="useDiv" value="1">`:`<textarea name="opt_en" style="min-height:110px">${esc((opts||[]).map(o=>o.en).join("\n"))}</textarea>`}</div>
+   ${q.options==="DIVISIONS"?"":`<div class="field opts-f"><label>Choices — Bahasa Indonesia (same order, optional)</label><textarea name="opt_id" style="min-height:110px">${esc((opts||[]).map(o=>o.id&&o.id!==o.en?o.id:"").join("\n"))}</textarea></div>`}
+   <div class="field"><label>Only show this question when…</label><div class="ed-grid"><select name="c_q"><option value="">Always show</option>${others.map(x=>`<option value="${esc(x.id)}" ${q.show_if&&q.show_if.q===x.id?"selected":""}>${esc(x.en.slice(0,50))}</option>`).join("")}</select>
+    <select name="c_op"><option value="eq" ${!q.show_if||q.show_if.op!=="neq"?"selected":""}>answer is</option><option value="neq" ${q.show_if&&q.show_if.op==="neq"?"selected":""}>answer is not</option></select></div>
+    <select name="c_v" style="margin-top:8px"></select></div>`,
+   async(f,form)=>{const en=String(f.get("en")||"").trim();if(!en)return "Question text is required.";
+     const type=String(f.get("type"));const nq={id:q.id,type,en,id_:String(f.get("id_")||"").trim(),required:!!f.get("required")};
+     if(type==="single"||type==="multi"){if(f.get("useDiv"))nq.options="DIVISIONS";else{const a=String(f.get("opt_en")||"").split("\n").map(s=>s.trim()).filter(Boolean);const b=String(f.get("opt_id")||"").split("\n").map(s=>s.trim());
+       if(!a.length)return "Add at least one choice.";nq.options=a.map((x,k)=>({en:x,id:b[k]||x}));}}
+     const cq=String(f.get("c_q")||"");if(cq)nq.show_if={q:cq,op:String(f.get("c_op")),v:String(f.get("c_v")||"")};
+     F[i]=nq;done();},isNew?"Add":"Save");
+  const form=$("#admF");const syncType=()=>{const tp=form.querySelector("[name=type]").value;$$(".opts-f",form).forEach(el=>el.classList.toggle("hide",!(tp==="single"||tp==="multi")));};
+  const syncV=()=>{const cq=form.querySelector("[name=c_q]").value;const src=F.find(x=>x.id===cq);const sel=form.querySelector("[name=c_v]");
+    sel.innerHTML=src?qOptions(src).map(o=>`<option ${q.show_if&&q.show_if.v===o.en?"selected":""}>${esc(o.en)}</option>`).join(""):"";sel.classList.toggle("hide",!src);form.querySelector("[name=c_op]").disabled=!src;};
+  form.querySelector("[name=type]").onchange=syncType;form.querySelector("[name=c_q]").onchange=syncV;syncType();syncV();}
+
 /* ---------------- router ---------------- */
 let afterLoginTarget=null;
 function go(h){if(location.hash==="#"+h)route();else location.hash=h;}
@@ -2106,7 +2289,7 @@ function renderNav(){const cur=(location.hash||"#home").slice(1);const items=[["
   $("#navLinks").innerHTML=items.map(([h,k])=>`<a href="#${h}" class="${cur===h||(h==="members"&&cur.startsWith("member"))?"on":""}">${esc(t(k))}</a>`).join("");
   const u=me();
   $("#mmLinks").innerHTML=[["home","nav_home"]].concat(items).map(([h,k],i)=>`<a href="#${h}">${i%2?`<em>${esc(t(k))}</em>`:esc(t(k))}</a>`).join("")+
-    (u?`<a href="#inbox">${esc(t("nav_msgs"))}</a><a href="#account"><em>${esc(t("account"))}</em></a>${isAdmin()?`<a href="#admin">Admin</a>`:""}`:`<a href="#signin"><em>${esc(t("signin"))}</em></a><a href="#signup">${esc(t("create_free"))}</a>`);
+    (u?`<a href="#inbox">${esc(t("nav_msgs"))}</a><a href="#member-data">${esc(ft("lbl"))}</a><a href="#account"><em>${esc(t("account"))}</em></a>${isAdmin()?`<a href="#admin">Admin</a>`:""}`:`<a href="#signin"><em>${esc(t("signin"))}</em></a><a href="#signup">${esc(t("create_free"))}</a>`);
   $("#acctSlot").innerHTML=u?`<a class="msg-btn" href="#inbox" title="${esc(t("nav_msgs"))}" aria-label="${esc(t("nav_msgs"))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 5h16v11H9l-5 4z"/></svg><span id="msgDot" class="dot ${unreadAny?"":"hide"}"></span></a><a class="avatar-btn portrait" href="#account" title="${esc(t("account"))}">${portrait(u)}</a>`:
     `<a class="small-btn hdr-signin" href="#signin">${esc(t("signin"))}</a><a class="small-btn solid" href="#signup">${esc(t("join_short"))}</a>`;
   $$(".lang button").forEach(b=>b.classList.toggle("on",b.dataset.l===lang));
@@ -2127,6 +2310,7 @@ function route(){
   else if(h==="signin"){if(me()){go("account");return;}app.innerHTML=viewSignin();after=afterSignin;}
   else if(h==="signup"){if(me()){go("inbox");return;}app.innerHTML=viewSignup();after=afterSignup;}
   else if(h==="admin"){app.innerHTML=viewAdmin();after=afterAdmin;}
+  else if(h==="member-data"){if(!me()){afterLoginTarget="member-data";go("signin");return;}app.innerHTML=viewMemberForm();after=afterMemberForm;}
   else if(h==="feed"){app.innerHTML=viewFeed();after=afterFeed;}
   else if(h.startsWith("post-")&&getPost(h.slice(5))){const p=getPost(h.slice(5));app.innerHTML=viewPost(p);after=()=>afterPost(p);}
   else if(h==="inbox"){app.innerHTML=viewInbox();after=afterInbox;}
